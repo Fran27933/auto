@@ -89,6 +89,28 @@ th{background:#fbfdff;font-weight:600;color:var(--azul-oscuro)}
 .res-green{background:rgba(236,253,245,0.95);color:var(--green);border:1px solid rgba(200,250,220,0.9)}
 weak-item{margin-top:8px;padding:10px;border-radius:8px;background:#fff;border:1px solid var(--borde)}
 footer{max-width:880px;margin:10px auto 60px;padding:8px 18px;font-size:13px;color:#64748b;text-align:center}
+/* New style for loading overlay */
+#loadingOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    flex-direction: column;
+    font-size: 18px;
+    color: var(--azul-oscuro);
+    font-weight: 700;
+}
+#loadingOverlay p {
+    margin: 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--gris-suave);
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.1);
+}
 </style>
 </head>
 <body>
@@ -157,7 +179,7 @@ footer{max-width:880px;margin:10px auto 60px;padding:8px 18px;font-size:13px;col
 </div>
 <div class="full">
 <label>Número de celular (opcional)</label>
-<input id="fieldPhone" type="text" placeholder="Ej: +54 9 11 5555 1234 (Opcional)">
+<input id="fieldPhone" type="text" placeholder="Ej: 11 5555 1234 (Solo números)">
 </div>
 </div>
 <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
@@ -226,6 +248,10 @@ footer{max-width:880px;margin:10px auto 60px;padding:8px 18px;font-size:13px;col
 </section>
 </main>
 <footer>© Salto Consultora — Acompañamos personas y equipos a gestionar mejor.</footer>
+
+<div id="loadingOverlay" style="display:none;">
+    <p>Aguarde mientras se cargan los datos...</p>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ======= CONFIG & DATA (Apps Script Integration) ======= */
@@ -331,6 +357,9 @@ const weakPointsDiv = document.getElementById('weakPoints');
 const combinedTextP = document.getElementById('combinedText');
 const btnDownloadPdf = document.getElementById('btnDownloadPdf');
 const progressBar = document.getElementById('progressBar');
+// NEW: Loading Overlay DOM ref
+const loadingOverlay = document.getElementById('loadingOverlay');
+
 /* ===== Funciones auxiliares (Mantienen su definición) ===== */
 function showDataCard(){
 // prefill team size depending on flow
@@ -463,9 +492,13 @@ else combined = 'Resultado mixto: priorizá según urgencia y planificá revisio
 const fullTitleOther = flowType==='team' ? 'Liderazgo y Equipo' : 'Dimensión Personal';
 lastResult = {scE, scOther, semE, semO, semOverall, combined, titleOther: fullTitleOther, overallPct};
 
-// 🛑 1. PREPARAR DATOS PARA EL ENVÍO (Apps Script) 🛑
+// 🛑 1. SHOW LOADING MESSAGE 🛑
+loadingOverlay.style.display = 'flex'; // Show the overlay
+
+// 🛑 2. PREPARAR DATOS PARA EL ENVÍO (Apps Script) 🛑
 const dataToSubmit = new FormData();
 dataToSubmit.append('flowType', flowType);
+// User data is already clean (uppercase/lowercase/numbers only) thanks to input listeners
 dataToSubmit.append('name', user.name);
 dataToSubmit.append('company', user.company);
 dataToSubmit.append('rubro', user.rubro);
@@ -480,7 +513,7 @@ dataToSubmit.append(q.id, answers[q.id] || ''); // Enviamos el ID y la respuesta
 // Resultados finales
 dataToSubmit.append('scorePct', overallPct.toFixed(4));
 dataToSubmit.append('combinedText', combined);
-// 🛑 2. ENVIAR DATOS (ASÍNCRONO) 🛑
+// 🛑 3. ENVIAR DATOS (ASÍNCRONO) 🛑
 try {
 const response = await fetch(APPS_SCRIPT_URL, {
 method: 'POST',
@@ -490,8 +523,12 @@ body: dataToSubmit
 // console.log('Apps Script Result:', result);
 } catch (error) {
 console.error('Error al enviar datos al Apps Script:', error);
+} finally {
+// 🛑 4. HIDE LOADING MESSAGE AFTER FETCH 🛑
+loadingOverlay.style.display = 'none'; // Hide the overlay
 }
-// 🛑 3. RENDERIZAR RESULTADOS VISUALES (Usando el literal corregido) 🛑
+
+// 🛑 5. RENDERIZAR RESULTADOS VISUALES (Usando el literal corregido) 🛑
 // render boxes
 resultsBoxes.innerHTML = '';
 const boxE = document.createElement('div'); boxE.className='res-box ' + (semE.color==='red'?'res-red':semE.color==='yellow'?'res-yellow':'res-green');
@@ -534,7 +571,7 @@ resultsCard.style.display='block';
 // scroll into view
 resultsCard.scrollIntoView({behavior:'smooth'});
 }
-/* ===== PDF generation (jsPDF) (CORREGIDO Y OPTIMIZADO) ===== */
+/* ===== PDF generation (jsPDF) (Revertido a times y formato simple) ===== */
 async function generatePDFandDownload(){
     if(!lastResult){ alert('Generá primero el resultado.'); return; }
     
@@ -555,7 +592,7 @@ async function generatePDFandDownload(){
 
     const { jsPDF } = window.jspdf;
     
-    // 🛑 Revertido a fuente 'times' (la versión inmediatamente anterior) con ISO-8859-1
+    // 🛑 Inicialización con codificación ISO-8859-1 y fuente 'times'
     const doc = new jsPDF({
         unit:'pt', 
         format:'a4', 
@@ -645,7 +682,7 @@ async function generatePDFandDownload(){
     
     function drawSectionResults(yStart, sectionTitle, resultInfo, weakItems, semColor) {
         
-        // 🛑 NUEVO: Título principal de la sección, sin caja ni formato de encabezado.
+        // 🛑 Título principal de la sección (Sin caja de fondo)
         doc.setFontSize(14); 
         doc.setTextColor(AZUL_OSCURO);
         doc.text(sectionTitle, left, yStart); yStart += 14;
@@ -746,7 +783,26 @@ dataCard.style.display='none';
 questionCard.style.display='none';
 reviewCard.style.display='none';
 resultsCard.style.display='none';
+loadingOverlay.style.display='none'; // Ensure hidden initially
 updateProgressBar();
+
+// --- Input Format Enforcement (New) ---
+document.getElementById('fieldName').addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
+});
+document.getElementById('fieldCompany').addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
+});
+document.getElementById('fieldRubro').addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
+});
+document.getElementById('fieldEmail').addEventListener('input', function() {
+    this.value = this.value.toLowerCase();
+});
+document.getElementById('fieldPhone').addEventListener('input', function() {
+    // Allows only digits 0-9
+    this.value = this.value.replace(/[^0-9]/g, '');
+});
 // --- Event bindings: start flow ---
 btnHaveTeam.addEventListener('click', ()=> {
 flowType='team';
