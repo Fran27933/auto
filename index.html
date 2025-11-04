@@ -323,7 +323,7 @@ S4: "Usá la matriz 'urgente-importante' para priorizar tareas clave.",
 S5: "Pido ayuda o delego tareas cuando lo necesito.",
 S6: "Reservá tiempo mensual para formación con objetivos concretos.",
 S7: "Aprendé técnicas breves de regulación emocional (respiración, pausa).",
-S8: "Definí tu propuesta de valor en 2 frases y revisala cada trimestre."
+S8: "Tengo claridad sobre mi propuesta de valor y objetivos a medio plazo."
 };
 /* ======= App State ======= */
 let flowType = null; // 'team' or 'solo'
@@ -491,6 +491,7 @@ else combined = 'Resultado mixto: priorizá según urgencia y planificá revisio
 
 // 🛑 Corrección del literal 🛑
 const fullTitleOther = flowType==='team' ? 'Liderazgo y Equipo' : 'Dimensión Personal';
+// 🟢 Se almacenan los objetos scE y scOther (que contienen el pct) en lastResult
 lastResult = {scE, scOther, semE, semO, semOverall, combined, titleOther: fullTitleOther, overallPct};
 
 // 🛑 1. SHOW LOADING MESSAGE 🛑
@@ -681,7 +682,8 @@ async function generatePDFandDownload(){
     // =============================================================
     const titleOther = lastResult.titleOther; // Contiene el literal corregido ('Liderazgo y Equipo' o 'Dimensión Personal')
     
-    function drawSectionResults(yStart, sectionTitle, resultInfo, weakItems, semColor) {
+    // 🟢 FUNCIÓN CORREGIDA 🟢: Recibe el objeto de puntuación bruta (rawScoreObj) y el semáforo (semObj)
+    function drawSectionResults(yStart, sectionTitle, rawScoreObj, semObj, weakItems) {
         
         // 🛑 Título principal de la sección (Sin caja de fondo)
         doc.setFontSize(14); 
@@ -690,9 +692,10 @@ async function generatePDFandDownload(){
 
         // Semáforo de la sección
         doc.setFontSize(11); 
-        const semaforoColor = getSemColor(resultInfo.color);
+        const semaforoColor = getSemColor(semObj.color); // Usa semObj.color
         doc.setTextColor(semaforoColor);
-        doc.text(`Zona de resultado: ${resultInfo.label} (${Math.round(resultInfo.pct * 100).toFixed(0)}%)`, left, yStart); yStart += 18;
+        // ✅ CORRECCIÓN NaN%: Usa rawScoreObj.pct
+        doc.text(`Zona de resultado: ${semObj.label} (${Math.round(rawScoreObj.pct * 100).toFixed(0)}%)`, left, yStart); yStart += 18;
         
         // --- Puntos Débiles ---
         
@@ -705,7 +708,7 @@ async function generatePDFandDownload(){
         if (weakItems.length) {
             
             doc.setFontSize(10); doc.setTextColor(70);
-            const bulletColor = getSemColor(semColor);
+            const bulletColor = getSemColor(semObj.color); // Usa semObj.color para el bullet
             
             weakItems.forEach(w => {
                 if (yStart > 750) { 
@@ -740,11 +743,13 @@ async function generatePDFandDownload(){
 
     // 3.1. Estructura
     const weakE = ESTRUCTURA.map(q=>({id:q.id, val: answers[q.id]||0, text:q.text})).filter(x=> x.val>0 && x.val<=2).sort((a,b)=> a.val-b.val).slice(0,4);
-    y = drawSectionResults(y, 'Estructura y Gestión', lastResult.semE, weakE, lastResult.semE.color);
+    // 🟢 LLAMADA CORREGIDA 🟢: Se pasa lastResult.scE (puntuación con pct) y lastResult.semE (semáforo)
+    y = drawSectionResults(y, 'Estructura y Gestión', lastResult.scE, lastResult.semE, weakE); 
     
     // 3.2. Equipo / Personal
     const weakO = (flowType==='team'?EQUIPO:SOLO).map(q=>({id:q.id,val:answers[q.id]||0,text:q.text})).filter(x=> x.val>0 && x.val<=2).sort((a,b)=> a.val-b.val).slice(0,4);
-    y = drawSectionResults(y, titleOther, lastResult.semO, weakO, lastResult.semO.color); // Usa titleOther con el literal corregido
+    // 🟢 LLAMADA CORREGIDA 🟢: Se pasa lastResult.scOther (puntuación con pct) y lastResult.semO (semáforo)
+    y = drawSectionResults(y, titleOther, lastResult.scOther, lastResult.semO, weakO); // Usa titleOther con el literal corregido
 
     // =============================================================
     // 4. INTERPRETACIÓN COMBINADA
